@@ -1,3 +1,6 @@
+// Aluna > Dayanne Fernandes da Cunha
+// Matrícula > 130107191
+
 #include <pthread.h>
 #include <iostream>
 #include <cstdlib>
