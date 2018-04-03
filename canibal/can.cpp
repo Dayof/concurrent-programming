@@ -13,8 +13,7 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cozinheiro_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t canibal_cond = PTHREAD_COND_INITIALIZER;
 
-int REF_READY = 0;
-int REF = 0;
+int REF_READY = 0, REF = 0;
 
 void * consumir(void* id)
 {
@@ -107,7 +106,7 @@ void create_threads()
 
 int main()
 {
-  // comida inicial
+  // Comida inicial
   REF = rand() % 50;
 
   create_threads();
