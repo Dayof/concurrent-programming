@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <iostream>
 #include <cstdlib>
-#include <vector>
 #include <semaphore.h>
 
 #define USERS 30
