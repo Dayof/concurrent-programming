@@ -12,7 +12,7 @@
 #include <string>
 #include <map>
 
-#define BUFFER_COMMANDS 10
+#define BUFFER_COMMANDS 2
 #define NUM_MOTORS 3
 
 #define COMMAND_X 'X'
@@ -29,6 +29,7 @@ void *motor_z(void *id);
 bool check_command_input(std::string command);
 void process_command();
 
+sem_t buffer;
 sem_t command_buffer;
 sem_t command_execution_x;
 sem_t command_execution_y;
@@ -53,20 +54,24 @@ void *joystick(void* id) {
   int buffer_counter;
 
   if (DEBUG) std::cout << "--- Joystick criado ---\n\n";
+  std::cout << "------ BEM VINDA(O) ------" << std::endl;
+  std::cout << "- BUFFER DO JOYSTICK : " << BUFFER_COMMANDS << std::endl;
+  std::cout << "- NÚMERO DE SERVOMOTORES : " << NUM_MOTORS << std::endl;
   while (true) {
 
-    // try receive any commands from the joystick
-    // continue; thread if any command was received
-    // commands supposed to be already correct
-    std::cout << "- INSIRA UM COMANDO DO JOYSTICK :\n"
-              << "Opções: X+, X-, Y+, Y-, Z+, Z-\n\n";
+    // try receive any commands from joystick
+    // continue thread if any command was received
+    std::cout << "- INSIRA UM COMANDO DO JOYSTICK" << std::endl;
+    std::cout << "Opções: X+, X-, Y+, Y-, Z+, Z-\n> ";
     std::cin >> current_command;
 
     if (check_command_input(current_command)) {
 
-      // check size of the buffer
-      sem_getvalue(&command_buffer, &buffer_counter);
-      if (buffer_counter > BUFFER_COMMANDS)
+      // check buffer's size
+      sem_getvalue(&buffer, &buffer_counter);
+      std::cout << "--- Valor do buffer : " << buffer_counter
+                << " --- " << std::endl;
+      if (buffer_counter == 0)
         std::cout << "Comando ' " << current_command
                   << " ' será descartado pois o buffer de comandos "
                   << "já está lotado." << std::endl;
@@ -92,6 +97,7 @@ void *motors_interface(void* id) {
     if (DEBUG) std::cout << "--- Interface " << pid
                           << " aguardando comando ---" << std::endl;
     sem_wait(&command_buffer);
+    sem_wait(&buffer);
     std::cout << "--- Interface " << pid
               << " irá processar o comando recebido ---" << std::endl;
     // check connections and check which motor will be used
@@ -176,7 +182,7 @@ void *control_connections(void* id) {
     // status of connection
     pthread_mutex_lock(&mutex_connection);
 
-    std::cout << "--- CONTROLANDO AS CONEXÕES --- " << std::endl;
+    if (DEBUG) std::cout << "--- CONTROLANDO AS CONEXÕES --- " << std::endl;
     // set all motors connections to false to wait the motors itselves
     // say their correct status instead
     connection_x = false; connection_y = false; connection_z = false;
@@ -204,6 +210,8 @@ void *motor_x(void *id) {
 
       std::cout << "--- COMANDO " << command_to_exec
                 << " EXECUTADO ---" << std::endl;
+      std::cout << "--- Liberando espaço no buffer ---" << std::endl;
+      sem_post(&buffer);
     // if there isn't possible that 'motor_x' execute a command then
     // at least warns the system that this motor is alive
     } else {
@@ -238,6 +246,8 @@ void *motor_y(void *id) {
 
       std::cout << "--- COMANDO " << command_to_exec
                 << " EXECUTADO ---" << std::endl;
+      std::cout << "--- Liberando espaço no buffer ---" << std::endl;
+      sem_post(&buffer);
     // if there isn't possible that 'motor_y' execute a command then
     // at least warns the system that this motor is alive
     } else {
@@ -272,6 +282,8 @@ void *motor_z(void *id) {
 
       std::cout << "--- COMANDO " << command_to_exec
                 << " EXECUTADO ---" << std::endl;
+      std::cout << "--- Liberando espaço no buffer ---" << std::endl;
+      sem_post(&buffer);
     // if there isn't possible that 'motor_z' execute a command then
     // at least warns the system that this motor is alive
     } else {
@@ -316,7 +328,7 @@ void create_threads() {
     }
   }
 
-  std::cout << "--- THREADS CRIADAS ---" << std::endl;
+  if (DEBUG) std::cout << "--- THREADS CRIADAS ---" << std::endl;
 
   // wait until joystick thread finish
   pthread_join(t_joystick, NULL);
@@ -325,11 +337,12 @@ void create_threads() {
 // main function, starts here
 int main() {
   sem_init(&command_buffer, 0, 0);
+  sem_init(&buffer, 0, BUFFER_COMMANDS);
   sem_init(&command_execution_x, 0, 0);
   sem_init(&command_execution_y, 0, 0);
   sem_init(&command_execution_z, 0, 0);
 
-  std::cout << "--- INÍCIO DA CRIAÇÃO DAS THREADS ---" << std::endl;
+  if (DEBUG) std::cout << "--- INÍCIO DA CRIAÇÃO DAS THREADS ---" << std::endl;
   create_threads();
 
   return 0;
