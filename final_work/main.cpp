@@ -10,9 +10,10 @@
 #include <iostream>
 #include <cstdlib>
 #include <string>
+#include <queue>
 #include <map>
 
-#define BUFFER_COMMANDS 2
+#define BUFFER_COMMANDS 3
 #define NUM_MOTORS 3
 
 #define COMMAND_X 'X'
@@ -26,6 +27,7 @@ void *motor_x(void *id);
 void *motor_y(void *id);
 void *motor_z(void *id);
 
+void show_buffer(std::queue<std::string> tmp_buffer);
 bool check_command_input(std::string command);
 void process_command();
 
@@ -39,10 +41,19 @@ pthread_mutex_t mutex_command_exec = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_connection = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_command = PTHREAD_MUTEX_INITIALIZER;
 
-std::string current_command, command_to_exec;
+std::string current_command, command_to_exec, last_command;
+std::queue<std::string> vec_commands;
 bool connection_x = false, connection_y = false, connection_z = false;
 
 static bool DEBUG = false;
+
+void show_buffer(std::queue<std::string> tmp_buffer) {
+  while (!tmp_buffer.empty()) {
+    std::cout << tmp_buffer.front() << " ";
+    tmp_buffer.pop();
+  }
+  std::cout << std::endl;
+}
 
 bool check_command_input(std::string command) {
   return command == "X+" || command == "X-" ||
@@ -69,14 +80,22 @@ void *joystick(void* id) {
 
       // check buffer's size
       sem_getvalue(&buffer, &buffer_counter);
-      std::cout << "--- Valor do buffer : " << buffer_counter
-                << " --- " << std::endl;
+      if (DEBUG) std::cout << "--- Valor do buffer : " << buffer_counter
+                            << " --- " << std::endl;
       if (buffer_counter == 0)
         std::cout << "Comando ' " << current_command
                   << " ' será descartado pois o buffer de comandos "
                   << "já está lotado." << std::endl;
-      else sem_post(&command_buffer);
+      else {
+        vec_commands.push(current_command);
 
+        std::cout << "-- COMANDO RECEBIDO, BUFFER ATUAL --" << std::endl;
+        std::queue<std::string> tmp_buffer(vec_commands);
+        show_buffer(tmp_buffer);
+
+        sem_post(&command_buffer);
+      }
+      sleep(2);
     } else {
       std::cout << "[ERROR] Comando inválido, tente novamente.\n";
       continue;
@@ -107,15 +126,16 @@ void *motors_interface(void* id) {
 }
 
 void process_command() {
+  int value;
+
   // block other threads check current command, proccess one command per time
   pthread_mutex_lock(&mutex_command);
 
-  command_to_exec = current_command;
-
-  std::cout << "--- Processando o comando " << command_to_exec << " ---"
-            << std::endl;
+  if (DEBUG) std::cout << "--- Processando o comando "
+                        << current_command << " ---"
+                        << std::endl;
   // check which motor will be used
-  switch (command_to_exec[0]) {
+  switch (current_command[0]) {
       case COMMAND_X: {
         std::cout << "--- Comando para o motor X processado ---" << std::endl;
         // block the thread control_connections or motors to modify some motor
@@ -126,6 +146,7 @@ void process_command() {
         // if a command X is sent and motor is connected, then sent
         // this command to be executed
         if (connection_x) {
+          std::cout << "--- Motor X conectado ---" << std::endl;
           pthread_mutex_unlock(&mutex_connection);
           sem_post(&command_execution_x);
         }
@@ -143,6 +164,7 @@ void process_command() {
         // if a command Y is sent and motor is connected, then sent
         // this command to be executed
         if (connection_y) {
+          std::cout << "--- Motor Y conectado ---" << std::endl;
           pthread_mutex_unlock(&mutex_connection);
           sem_post(&command_execution_y);
         }
@@ -159,6 +181,7 @@ void process_command() {
         // if a command Z is sent and motor is connected, then sent
         // this command to be executed
         if (connection_z) {
+          std::cout << "--- Motor Z conectado ---" << std::endl;
           pthread_mutex_unlock(&mutex_connection);
           sem_post(&command_execution_z);
         }
@@ -201,17 +224,32 @@ void *motor_x(void *id) {
     // wait until a signal to execute a command on servomotor x arrives
     if (sem_trywait(&command_execution_x) == 0) {
 
+
       std::cout << "--- COMANDO X RECEBIDO ---" << std::endl;
-      std::cout << "--- EXECUTANDO COMANDO " << command_to_exec
+      if (!last_command.empty()) std::cout << "--- AGUARDANDO COMANDO "
+                                            << last_command
+                                            << " SER EXECUTADO ---"
+                                            << std::endl;
+      last_command = vec_commands.front();
+      // block other motors execute at the same time
+      pthread_mutex_lock(&mutex_command_exec);
+
+      std::cout << "--- EXECUTANDO COMANDO " << vec_commands.front()
                 << " ---" << std::endl;
 
       // command being executed
       sleep(10);
 
-      std::cout << "--- COMANDO " << command_to_exec
-                << " EXECUTADO ---" << std::endl;
+      std::cout << "--- COMANDO NO MOTOR X EXECUTADO ---" << std::endl;
       std::cout << "--- Liberando espaço no buffer ---" << std::endl;
       sem_post(&buffer);
+
+      // remove command processed from the queue of commands
+      vec_commands.pop();
+
+      pthread_mutex_unlock(&mutex_command_exec);
+
+      last_command.clear();
     // if there isn't possible that 'motor_x' execute a command then
     // at least warns the system that this motor is alive
     } else {
@@ -238,16 +276,31 @@ void *motor_y(void *id) {
     if (sem_trywait(&command_execution_y) == 0) {
 
       std::cout << "--- COMANDO Y RECEBIDO ---" << std::endl;
-      std::cout << "--- EXECUTANDO COMANDO " << command_to_exec
+      if (!last_command.empty()) std::cout << "--- AGUARDANDO COMANDO "
+                                            << last_command
+                                            << " SER EXECUTADO ---"
+                                            << std::endl;
+
+      last_command = vec_commands.front();
+      // block other motors execute at the same time
+      pthread_mutex_lock(&mutex_command_exec);
+
+      std::cout << "--- EXECUTANDO COMANDO " << vec_commands.front()
                 << " ---" << std::endl;
 
       // command being executed
       sleep(10);
 
-      std::cout << "--- COMANDO " << command_to_exec
-                << " EXECUTADO ---" << std::endl;
+      std::cout << "--- COMANDO NO MOTOR Y EXECUTADO ---" << std::endl;
       std::cout << "--- Liberando espaço no buffer ---" << std::endl;
       sem_post(&buffer);
+
+      // remove command processed from the queue of commands
+      vec_commands.pop();
+
+      pthread_mutex_unlock(&mutex_command_exec);
+
+      last_command.clear();
     // if there isn't possible that 'motor_y' execute a command then
     // at least warns the system that this motor is alive
     } else {
@@ -274,16 +327,30 @@ void *motor_z(void *id) {
     if (sem_trywait(&command_execution_z) == 0) {
 
       std::cout << "--- COMANDO Z RECEBIDO ---" << std::endl;
-      std::cout << "--- EXECUTANDO COMANDO " << command_to_exec
+      if (!last_command.empty()) std::cout << "--- AGUARDANDO COMANDO "
+                                            << last_command
+                                            << " SER EXECUTADO ---"
+                                            << std::endl;
+      last_command = vec_commands.front();
+      // block other motors execute at the same time
+      pthread_mutex_lock(&mutex_command_exec);
+
+      std::cout << "--- EXECUTANDO COMANDO " << vec_commands.front()
                 << " ---" << std::endl;
 
       // command being executed
       sleep(10);
 
-      std::cout << "--- COMANDO " << command_to_exec
-                << " EXECUTADO ---" << std::endl;
+      std::cout << "--- COMANDO NO MOTOR Z EXECUTADO ---" << std::endl;
       std::cout << "--- Liberando espaço no buffer ---" << std::endl;
       sem_post(&buffer);
+
+      // remove command processed from the queue of commands
+      vec_commands.pop();
+
+      pthread_mutex_unlock(&mutex_command_exec);
+
+      last_command.clear();
     // if there isn't possible that 'motor_z' execute a command then
     // at least warns the system that this motor is alive
     } else {
