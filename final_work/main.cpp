@@ -41,7 +41,7 @@ pthread_mutex_t mutex_command_exec = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_connection = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_command = PTHREAD_MUTEX_INITIALIZER;
 
-std::string current_command, command_to_exec, last_command;
+std::string current_command, last_command;
 std::queue<std::string> vec_commands;
 bool connection_x = false, connection_y = false, connection_z = false;
 
@@ -220,10 +220,10 @@ void *control_connections(void* id) {
 void *motor_x(void *id) {
   if (DEBUG) std::cout << "--- Motor X criado ---\n\n";
   while (true) {
-    // std::cout << "--- Motor X pronto para executar comando ---" << std::endl;
+    if (DEBUG)  std::cout << "--- Motor X pronto para executar comando ---"
+                          << std::endl;
     // wait until a signal to execute a command on servomotor x arrives
     if (sem_trywait(&command_execution_x) == 0) {
-
 
       std::cout << "--- COMANDO X RECEBIDO ---" << std::endl;
       if (!last_command.empty()) std::cout << "--- AGUARDANDO COMANDO "
@@ -231,7 +231,7 @@ void *motor_x(void *id) {
                                             << " SER EXECUTADO ---"
                                             << std::endl;
       last_command = vec_commands.front();
-      // block other motors execute at the same time
+      // avoid more then two servomotors execute commands at the same time
       pthread_mutex_lock(&mutex_command_exec);
 
       std::cout << "--- EXECUTANDO COMANDO " << vec_commands.front()
@@ -282,7 +282,7 @@ void *motor_y(void *id) {
                                             << std::endl;
 
       last_command = vec_commands.front();
-      // block other motors execute at the same time
+      // avoid more then two servomotors execute commands at the same time
       pthread_mutex_lock(&mutex_command_exec);
 
       std::cout << "--- EXECUTANDO COMANDO " << vec_commands.front()
@@ -332,7 +332,7 @@ void *motor_z(void *id) {
                                             << " SER EXECUTADO ---"
                                             << std::endl;
       last_command = vec_commands.front();
-      // block other motors execute at the same time
+      // avoid more then two servomotors execute commands at the same time
       pthread_mutex_lock(&mutex_command_exec);
 
       std::cout << "--- EXECUTANDO COMANDO " << vec_commands.front()
